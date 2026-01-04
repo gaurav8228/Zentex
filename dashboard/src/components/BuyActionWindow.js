@@ -12,21 +12,29 @@ const BuyActionWindow = ({ uid }) => {
   const [stockQuantity, setStockQuantity] = useState(1);
   const [stockPrice, setStockPrice] = useState(0.0);
 
-  const handleBuyClick = async () => {
-    try {
-      await axios.post("http://localhost:3002/newOrder", {
+ const handleBuyClick = async () => {
+  try {
+    await axios.post(
+      "http://localhost:3002/newOrder",
+      {
         name: uid,
-        qty: stockQuantity,
-        price: stockPrice,
+        qty: Number(stockQuantity),
+        price: Number(stockPrice),
         mode: "BUY",
-      });
+      },
+      {
+        withCredentials: true, // ✅ REQUIRED
+      }
+    );
 
-      // Close the window after the request finishes
-      closeBuyWindow();
-    } catch (err) {
-      console.error("Error placing order:", err);
-    }
-  };
+    closeBuyWindow();
+  } catch (err) {
+    console.error(
+      "Error placing order:",
+      err.response?.data || err.message
+    );
+  }
+};
 
   const handleCancelClick = () => {
     closeBuyWindow(); // simply close
