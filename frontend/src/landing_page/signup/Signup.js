@@ -6,26 +6,27 @@ const Signup = () => {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   const handleSignup = async (e) => {
     e.preventDefault();
+    setError("");
 
     try {
+      // Use environment variable for backend
+      const API_URL = process.env.REACT_APP_API_URL;
+
       await axios.post(
-        "http://localhost:3002/signup",
-        {
-          username,   // ✅ matches backend schema
-          email,
-          password,
-        },
-        { withCredentials: true }
+        `${API_URL}/signup`,
+        { username, email, password },
+        { withCredentials: true } // Important for cookies
       );
 
-      // redirect after signup
-      window.location.href = "http://localhost:3001";
+      // Redirect to dashboard after signup
+      window.location.href = process.env.REACT_APP_DASHBOARD_URL || "/";
     } catch (err) {
       console.error("Signup error:", err.response?.data || err.message);
-      alert(err.response?.data?.msg || "Signup failed");
+      setError(err.response?.data?.msg || "Signup failed");
     }
   };
 
@@ -58,6 +59,8 @@ const Signup = () => {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+
+          {error && <p className="auth-error">{error}</p>}
 
           <button type="submit">Signup</button>
         </form>

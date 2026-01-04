@@ -12,14 +12,17 @@ const Login = () => {
     setError("");
 
     try {
+      // Use environment variable for backend
+      const API_URL = process.env.REACT_APP_API_URL;
+
       await axios.post(
-        "http://localhost:3002/login",
+        `${API_URL}/login`,
         { email, password },
-        { withCredentials: true }
+        { withCredentials: true } // Important for cookies
       );
 
-      // redirect to dashboard
-      window.location.href = "http://localhost:3001";
+      // Redirect to dashboard (frontend URL)
+      window.location.href = process.env.REACT_APP_DASHBOARD_URL || "/";
     } catch (err) {
       console.error("Login error:", err.response?.data || err.message);
       setError(err.response?.data?.msg || "Invalid email or password");
