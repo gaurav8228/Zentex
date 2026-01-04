@@ -11,25 +11,34 @@ const UserModel = require("./model/UserModel");
 
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const app = express();
 const authMiddleware = require("./middleware/auth");
 
+const app = express();
+
+// ---------------------- CORS ----------------------
+const FRONTEND_URLS = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  process.env.FRONTEND_URL // Add frontend Render URL in .env
+].filter(Boolean);
 
 app.use(cors({
-  origin:   ["http://localhost:3000" , "http://localhost:3001"],
+  origin: FRONTEND_URLS,
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
 }));
 
+// ---------------------- MIDDLEWARE ----------------------
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// DATABASE
+// ---------------------- DATABASE ----------------------
 mongoose.connect(process.env.MONGO_URL)
-.then(() => console.log("MongoDB Connected 🚀"))
-.catch((err) => console.log("DB Error ❌", err));
+  .then(() => console.log("MongoDB Connected 🚀"))
+  .catch(err => console.log("DB Error ❌", err));
 
+// ---------------------- AUTH ROUTES ----------------------
 app.get("/verify", authMiddleware, (req, res) => {
   res.json({
     authorized: true,
@@ -55,32 +64,26 @@ app.post("/login", async (req, res) => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
       secure: process.env.NODE_ENV === "production"
     });
 
     res.json({ success: true });
   } catch (err) {
+    console.log("LOGIN ERROR ❌", err);
     res.status(500).json({ msg: "Login failed" });
   }
 });
 
 app.post("/signup", async (req, res) => {
   try {
-    console.log("REQ BODY 🔥", req.body);
-
     const { username, email, password } = req.body;
 
-    // 1. Check if user already exists
     const existingUser = await UserModel.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ msg: "User already exists" });
-    }
+    if (existingUser) return res.status(400).json({ msg: "User already exists" });
 
-    // 2. Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 3. Create user
     const user = await UserModel.create({
       username,
       email,
@@ -88,17 +91,15 @@ app.post("/signup", async (req, res) => {
       role: "user"
     });
 
-    // 4. Generate JWT
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
-    // 5. Send cookie
     res.cookie("token", token, {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
       secure: process.env.NODE_ENV === "production"
     });
 
@@ -109,42 +110,40 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-
 app.post("/logout", (req, res) => {
-  res.clearCookie("token");
+  res.clearCookie("token", {
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+    secure: process.env.NODE_ENV === "production"
+  });
   res.json({ success: true });
 });
 
-// HOLDINGS ROUTE
+// ---------------------- HOLDINGS ----------------------
 app.get("/allHoldings", authMiddleware, async (req, res) => {
-  const collections = await mongoose.connection.db
-    .listCollections()
-    .toArray();
-
-  console.log(
-    "COLLECTIONS:",
-    collections.map(c => c.name)
-  );
-
-  const data = await HoldingsModel.find({});
-  console.log("HOLDINGS DATA:", data);
-
-  res.json(data);
+  try {
+    const data = await HoldingsModel.find({});
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-
-// POSITIONS ROUTE
-app.get("/allPositions", authMiddleware ,  async (req, res) => {
-  const data = await PositionsModel.find({});
-  res.json(data);
+// ---------------------- POSITIONS ----------------------
+app.get("/allPositions", authMiddleware, async (req, res) => {
+  try {
+    const data = await PositionsModel.find({});
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// BUY ORDER
-app.post("/newOrder", authMiddleware ,  async (req, res) => {
+// ---------------------- ORDERS ----------------------
+app.post("/newOrder", authMiddleware, async (req, res) => {
   try {
     const { name, qty, price, mode } = req.body;
     const result = await OrdersModel.collection.insertOne({ name, qty, price, mode });
-
     res.status(201).json({ message: "Order saved!", result });
   } catch (err) {
     console.log("❌ Error:", err.message);
@@ -152,8 +151,7 @@ app.post("/newOrder", authMiddleware ,  async (req, res) => {
   }
 });
 
-// SELL ORDER
-app.post("/sellOrder", authMiddleware ,  async (req, res) => {
+app.post("/sellOrder", authMiddleware, async (req, res) => {
   try {
     const { name, qty } = req.body;
     const order = await OrdersModel.findOne({ name });
@@ -175,5 +173,6 @@ app.post("/sellOrder", authMiddleware ,  async (req, res) => {
   }
 });
 
-// START SERVER
-app.listen(3002, () => console.log("🔥 Server running at http://localhost:3002")); 
+// ---------------------- START SERVER ----------------------
+const PORT = process.env.PORT || 3002;
+app.listen(PORT, () => console.log(`🔥 Server running at port ${PORT}`));
