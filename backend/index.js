@@ -3,14 +3,13 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 
 const HoldingsModel = require("./model/HoldingsModel");
 const PositionsModel = require("./model/PositionsModel");
 const OrdersModel = require("./model/OrdersModel");
 const UserModel = require("./model/UserModel");
-
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
 const authMiddleware = require("./middleware/auth");
 
 const app = express();
@@ -19,13 +18,22 @@ const app = express();
 const FRONTEND_URLS = [
   "http://localhost:3000",
   "http://localhost:3001",
-  process.env.FRONTEND_URL // Add frontend Render URL in .env
+  process.env.FRONTEND_URL
 ].filter(Boolean);
 
 app.use(cors({
-  origin: FRONTEND_URLS,
+  origin: (origin, callback) => {
+    // allow requests like Postman (no origin)
+    if (!origin) return callback(null, true);
+
+    if (FRONTEND_URLS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true,
+  credentials: true
 }));
 
 // ---------------------- MIDDLEWARE ----------------------
@@ -38,43 +46,10 @@ mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB Connected 🚀"))
   .catch(err => console.log("DB Error ❌", err));
 
+// ---------------------- TEST ROUTE ----------------------
+app.get("/", (req, res) => res.send("Backend is live 🚀"));
+
 // ---------------------- AUTH ROUTES ----------------------
-app.get("/verify", authMiddleware, (req, res) => {
-  res.json({
-    authorized: true,
-    user: req.user
-  });
-});
-
-app.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const user = await UserModel.findOne({ email });
-    if (!user) return res.status(401).json({ msg: "User not found" });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ msg: "Invalid credentials" });
-
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
-    res.cookie("token", token, {
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-      secure: process.env.NODE_ENV === "production"
-    });
-
-    res.json({ success: true });
-  } catch (err) {
-    console.log("LOGIN ERROR ❌", err);
-    res.status(500).json({ msg: "Login failed" });
-  }
-});
-
 app.post("/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -91,16 +66,12 @@ app.post("/signup", async (req, res) => {
       role: "user"
     });
 
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
     res.cookie("token", token, {
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-      secure: process.env.NODE_ENV === "production"
+      sameSite: "None",
+      secure: true
     });
 
     res.status(201).json({ success: true });
@@ -110,13 +81,38 @@ app.post("/signup", async (req, res) => {
   }
 });
 
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await UserModel.findOne({ email });
+    if (!user) return res.status(401).json({ msg: "User not found" });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(401).json({ msg: "Invalid credentials" });
+
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      sameSite: "None",
+      secure: true
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.log("LOGIN ERROR ❌", err);
+    res.status(500).json({ msg: "Login failed" });
+  }
+});
+
 app.post("/logout", (req, res) => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-    secure: process.env.NODE_ENV === "production"
-  });
+  res.clearCookie("token", { httpOnly: true, sameSite: "None", secure: true });
   res.json({ success: true });
+});
+
+app.get("/verify", authMiddleware, (req, res) => {
+  res.json({ authorized: true, user: req.user });
 });
 
 // ---------------------- HOLDINGS ----------------------
