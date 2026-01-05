@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./auth.css";
 
@@ -7,22 +8,23 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
+  const navigate = useNavigate();
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
 
     try {
-      // Use environment variable for backend
       const API_URL = process.env.REACT_APP_API_URL;
 
       await axios.post(
         `${API_URL}/login`,
         { email, password },
-        { withCredentials: true } // Important for cookies
+        { withCredentials: true }
       );
 
-      // Redirect to dashboard (frontend URL)
-      window.location.href = process.env.REACT_APP_DASHBOARD_URL || "/";
+      // SPA-safe navigation (NO reload)
+      navigate("/");
     } catch (err) {
       console.error("Login error:", err.response?.data || err.message);
       setError(err.response?.data?.msg || "Invalid email or password");
@@ -57,7 +59,7 @@ const Login = () => {
         </form>
 
         <div className="auth-footer">
-          Don’t have an account? <a href="/signup">Signup</a>
+          Don’t have an account? <Link to="/signup">Signup</Link>
         </div>
       </div>
     </div>
